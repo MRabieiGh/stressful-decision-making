@@ -8,10 +8,13 @@ addpath("Functions")
 
 global state
 state = "before-admin";
+
 %% Per Subject Information
 Subject.name = input("Please enter your name: ",'s');
-Subject.code = assignCode();
-Subject.date = datestr(today, 'yyyy/mm/dd');
+Subject.date = datestr(datetime('now'), 'yyyymmdd_hhMM');
+Subject.seed = randi(10000);
+rng(Subject.seed)
+
 %% Initialization
 load(fullfile("Misc", "text.mat"))
 load(fullfile("Misc", "menu.mat"))
@@ -48,6 +51,8 @@ Config.graphics.coord = loccent(windowRect, Config.graphics.option_r);
 %% Initialize Result Variables
 Subject.choices = [];
 Subject.reaction_times = [];
+Subject.alertness = [];
+
 %%
 Config.condition.header = {'Condition Index', 'A1', 'A2', 'B1', 'B2', ...
     'Prob', 'Type (1:solo, 2:risky-risky, 3:risky-safe, 4:safe-safe', 'Safe Option'};
@@ -100,10 +105,10 @@ clear m t p counter
 Config.condition.mat1 = Config.condition.map1(randperm(size(Config.condition.map1, 1)), :);
 Config.condition.mat2 = Config.condition.map2(randperm(size(Config.condition.map1, 1)), :);
 %%
-out_dir = fullfile(pwd, "Sessions", strcat(datestr(today, 'yyyymmdd'), ...
-    "-", num2str(Subject.code)));
+out_dir = fullfile(pwd, "Sessions", strcat(Subject.date, ...
+    "-", Subject.name));
 mkdir(out_dir)
-save(fullfile(out_dir, 'config.mat'), 'Config')
+save(fullfile(out_dir, 'config.mat'), 'Config', 'Subject')
 save currdir.mat out_dir
 
 %% Begin the Task
@@ -122,9 +127,8 @@ wprint(window, Config.graphics.unicode.press_space, Config.font.medium, ...
 Screen('Flip', window);
 pollev({'space'}, true)
 
-%%
 % Trial window
-for i = 1%size(Config.condition.mat, 1)
+for i = 1:size(Config.condition.mat1, 1)
     % Inter Trial Interval
     Screen('DrawLine', window, 255, ...
         Config.graphics.coord.div.start(1), ...
@@ -146,13 +150,21 @@ for i = 1%size(Config.condition.mat, 1)
     Subject.reaction_times = [Subject.reaction_times reaction_time];
     
     % View subject's chosen option
-    opreview(window, Config, i, key, so)
-    WaitSecs(Config.time.option_review);
+    Subject.alertness = [Subject.alertness, opreview(window, Config, i, key, so)];
+    
     KbEventFlush();
 end
 
 %% Close and Save
 Screen('CloseAll')
-save(fullfile(pwd, "Sessions", ...
-    strcat(datestr(today, 'yyyymmdd'), "-", num2str(Subject.code))), ...
-    'Subject', 'Config')
+
+tbl = array2table(Config.condition.mat1);
+tbl.Properties.VariableNames = Config.condition.header;
+writetable(tbl, fullfile(out_dir, 'condition_matrix.csv'))
+
+tbl = array2table([string(Subject.choices), ...
+    num2str(Subject.reaction_times), num2str(Subject.alertness)]);
+tbl.Properties.VariableNames = {'choice', 'reaction_time', 'was_alert'};
+writetable(tbl, fullfile(out_dir, 'before.csv'))
+
+save(fullfile(out_dir, 'before.mat'), 'Subject')
